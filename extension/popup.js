@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const mainView = document.getElementById('main-view');
   const authForm = document.getElementById('auth-form');
   const authError = document.getElementById('auth-error');
+  const saveError = document.getElementById('save-error');
   const signinBtn = document.getElementById('signin-btn');
   const signupBtn = document.getElementById('signup-btn');
   const signoutBtn = document.getElementById('signout-btn');
@@ -90,18 +91,30 @@ document.addEventListener('DOMContentLoaded', async () => {
       </svg>
       Saving...
     `;
+    if (saveError) saveError.textContent = '';
 
-    await chrome.runtime.sendMessage({ action: 'savePage' });
+    const response = await chrome.runtime.sendMessage({ action: 'savePage' });
 
     savePageBtn.disabled = false;
-    savePageBtn.innerHTML = `
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="20 6 9 17 4 12"></polyline>
-      </svg>
-      Saved!
-    `;
-
-    setTimeout(() => {
+    if (response?.success) {
+      savePageBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        Saved!
+      `;
+      setTimeout(() => {
+        savePageBtn.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+            <polyline points="7 3 7 8 15 8"></polyline>
+          </svg>
+          Save This Page
+        `;
+        loadRecentSaves();
+      }, 1500);
+    } else {
       savePageBtn.innerHTML = `
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
@@ -110,8 +123,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         </svg>
         Save This Page
       `;
-      loadRecentSaves();
-    }, 1500);
+      if (saveError) saveError.textContent = response?.error || 'Save failed';
+    }
   });
 
   // Load recent saves

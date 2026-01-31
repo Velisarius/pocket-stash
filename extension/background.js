@@ -48,8 +48,27 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
+function isRestrictedUrl(url) {
+  if (!url) return true;
+  try {
+    const u = new URL(url);
+    return u.protocol === 'chrome:' || u.protocol === 'edge:' || u.protocol === 'about:' || u.protocol === 'chrome-extension:';
+  } catch {
+    return true;
+  }
+}
+
+function sendToastToTab(tabId, message, isError) {
+  if (!tabId) return;
+  chrome.tabs.sendMessage(tabId, { action: 'showToast', message, isError }).catch(() => {});
+}
+
 // Save highlighted text
 async function saveHighlight(tab, selectionText) {
+  if (!tab?.id) {
+    console.error('Save highlight: no tab');
+    return;
+  }
   try {
     await supabase.insert('saves', {
       user_id: CONFIG.USER_ID,
@@ -59,52 +78,54 @@ async function saveHighlight(tab, selectionText) {
       site_name: new URL(tab.url).hostname.replace('www.', ''),
       source: 'extension',
     });
-
-    chrome.tabs.sendMessage(tab.id, {
-      action: 'showToast',
-      message: 'Highlight saved!',
-    });
+    sendToastToTab(tab.id, 'Highlight saved!', false);
   } catch (err) {
     console.error('Save highlight failed:', err);
-    chrome.tabs.sendMessage(tab.id, {
-      action: 'showToast',
-      message: 'Failed to save: ' + err.message,
-      isError: true,
-    });
+    sendToastToTab(tab.id, 'Failed to save: ' + err.message, true);
   }
 }
 
 // Save full page
 async function savePage(tab) {
+  if (!tab?.id) {
+    console.error('Save page: no tab');
+    return;
+  }
+  if (isRestrictedUrl(tab.url)) {
+    console.error('Save page: cannot save this page (restricted URL)');
+    sendToastToTab(tab.id, "Can't save this page. Open a normal webpage and try again.", true);
+    return;
+  }
+
   try {
     console.log('savePage called for:', tab.url);
     let article;
-
-    // Extract from current page - inject content script first if needed
-    console.log('Extracting article...');
 
     try {
       article = await chrome.tabs.sendMessage(tab.id, { action: 'extractArticle' });
     } catch (e) {
       // Content script not loaded, inject it first
+      if (typeof chrome.scripting === 'undefined' || !chrome.scripting.executeScript) {
+        throw new Error("Extension scripting not available. Reload the extension and try again.");
+      }
       console.log('Content script not loaded, injecting...');
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['Readability.js', 'content.js']
-      });
-      // Wait a moment for script to initialize
-      await new Promise(r => setTimeout(r, 100));
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['Readability.js', 'content.js']
+        });
+      } catch (injectErr) {
+        throw new Error("Can't run on this page. Try a different website.");
+      }
+      await new Promise(r => setTimeout(r, 150));
       article = await chrome.tabs.sendMessage(tab.id, { action: 'extractArticle' });
     }
-
-    console.log('Article extracted:', article?.title, 'content length:', article?.content?.length);
 
     if (!article) {
       throw new Error('Failed to extract article content');
     }
 
-    console.log('Inserting into Supabase...');
-    const result = await supabase.insert('saves', {
+    await supabase.insert('saves', {
       user_id: CONFIG.USER_ID,
       url: tab.url,
       title: article.title,
@@ -116,19 +137,11 @@ async function savePage(tab) {
       image_url: article.imageUrl,
       source: 'extension',
     });
-    console.log('Insert result:', result);
 
-    chrome.tabs.sendMessage(tab.id, {
-      action: 'showToast',
-      message: 'Page saved!',
-    });
+    sendToastToTab(tab.id, 'Page saved!', false);
   } catch (err) {
     console.error('Save page failed:', err);
-    chrome.tabs.sendMessage(tab.id, {
-      action: 'showToast',
-      message: 'Failed to save: ' + err.message,
-      isError: true,
-    });
+    sendToastToTab(tab.id, err.message || 'Failed to save: ' + err.message, true);
   }
 }
 
@@ -136,9 +149,15 @@ async function savePage(tab) {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'savePage') {
     chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-      if (tabs[0]) {
+      try {
+        if (!tabs?.[0]) {
+          sendResponse({ success: false, error: 'No tab found' });
+          return;
+        }
         await savePage(tabs[0]);
         sendResponse({ success: true });
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
       }
     });
     return true;

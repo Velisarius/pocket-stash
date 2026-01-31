@@ -13,18 +13,14 @@ A simple, self-hosted Pocket replacement with Chrome extension, web app, and cro
    - Project URL (e.g., `https://xxxxx.supabase.co`)
    - `anon` public key
 
-### 2. Configure the Extension
+### 2. Configure (without committing secrets)
 
-1. Open `extension/config.js`
-2. Replace the placeholder values:
-   ```js
-   const CONFIG = {
-     SUPABASE_URL: 'https://your-project.supabase.co',
-     SUPABASE_ANON_KEY: 'your-anon-key-here',
-     WEB_APP_URL: 'https://your-stash-app.vercel.app', // After step 5
-     USER_ID: 'your-user-id', // After step 3
-   };
-   ```
+Config files with your credentials are **gitignored** so you can push to GitHub safely.
+
+**Extension and web (local):**
+1. Copy `extension/config.example.js` to `extension/config.js`
+2. Copy `web/config.example.js` to `web/config.js`
+3. Fill in your Supabase URL, anon key, user ID (and `WEB_APP_URL` in extension after you deploy)
 
 ### 3. Create Your User Account
 
@@ -42,12 +38,17 @@ A simple, self-hosted Pocket replacement with Chrome extension, web app, and cro
 
 ### 5. Deploy the Web App
 
-**Option A: Vercel (Recommended)**
-1. Push this repo to GitHub
+**Option A: Vercel (Recommended, no credentials in repo)**
+1. Push this repo to GitHub. Your `extension/config.js` and `web/config.js` are gitignored, so they are **not** pushed—only the example files and build script are in the repo. (If you already committed those files earlier, run `git rm --cached extension/config.js web/config.js` before pushing, then commit; consider rotating your Supabase anon key if the repo was ever public.)
 2. Go to [vercel.com](https://vercel.com) and sign in
 3. Click "New Project" > Import your repo
-4. Set the root directory to `web`
-5. Deploy (it's free for personal use)
+4. Set **Root Directory** to `web`
+5. In **Build and Output Settings** set **Build Command** to `npm run build` (this generates `config.js` from env vars at deploy time)
+6. Go to **Settings > Environment Variables** and add:
+   - `SUPABASE_URL` = your Supabase project URL
+   - `SUPABASE_ANON_KEY` = your anon public key
+   - `USER_ID` = your Supabase user UUID (Authentication > Users)
+7. Deploy. Your live URL will use the config built from those env vars.
 
 **Option B: Local Only**
 ```bash
@@ -58,7 +59,7 @@ Then open http://localhost:3000
 
 ### 6. Update Config with Web App URL
 
-After deploying, update `extension/config.js` with your web app URL.
+After deploying to Vercel, set `WEB_APP_URL` in your local `extension/config.js` to your Vercel URL (e.g. `https://your-project.vercel.app`).
 
 ## Using Stash
 

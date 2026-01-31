@@ -15,8 +15,10 @@ npm-debug.log
 # Logs
 *.log
 
-# Local config with real credentials
+# Local config with real credentials (never commit these)
 config.local.js
+extension/config.js
+web/config.js
 
 # Vercel
 .vercel/
