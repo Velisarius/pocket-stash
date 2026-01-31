@@ -27,11 +27,26 @@ class StashApp {
     // Load theme preference
     this.loadTheme();
 
-    // Skip auth - go straight to main screen
-    this.showMainScreen();
-    this.loadData();
-
     this.bindEvents();
+
+    // RLS requires auth: check session first, then show main or auth screen
+    const { data: { session } } = await this.supabase.auth.getSession();
+    if (session) {
+      this.showMainScreen();
+      this.loadData();
+    } else {
+      this.showAuthScreen();
+    }
+
+    // Reload data when auth state changes (e.g. sign in from another tab)
+    this.supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        this.showMainScreen();
+        this.loadData();
+      } else {
+        this.showAuthScreen();
+      }
+    });
   }
 
   // Theme Management
@@ -290,6 +305,9 @@ class StashApp {
 
     if (error) {
       errorEl.textContent = error.message;
+    } else {
+      this.showMainScreen();
+      this.loadData();
     }
 
     btn.disabled = false;
